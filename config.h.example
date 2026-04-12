@@ -1,0 +1,11 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// Renomeie este arquivo para config.h e preencha com seus dados
+const char* WIFI_SSID = "SEU_SSID_AQUI";
+const char* WIFI_PASS = "SUA_SENHA_AQUI";
+
+const char* GOOGLE_SCRIPT_URL = "URL_DO_SEU_SCRIPT";
+const char* SPOTIFY_TOKEN = "SEU_TOKEN";
+
+#endif

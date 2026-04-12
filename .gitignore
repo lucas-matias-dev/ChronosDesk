@@ -1,0 +1,8 @@
+# Configurações sensíveis (Suas senhas reais)
+config.h
+
+# Pastas de compilação e temporários
+build/
+.vscode/
+*.bin
+*.elf
