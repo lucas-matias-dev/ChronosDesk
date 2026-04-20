@@ -55,7 +55,7 @@ void conectarWifi(){
 
   //defino a potencia do sinal
   esp_wifi_set_max_tx_power(40);
-  WiFi.STA.connect("WIFI_SSID", "WIFI_PASS");
+  WiFi.STA.connect(WIFI_SSID, WIFI_PASS);
 
 
   // Testando a conexão, nesse caso haverá 10 "tentativas"
