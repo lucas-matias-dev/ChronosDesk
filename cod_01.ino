@@ -22,6 +22,9 @@
 //--- SENHAS E CONFIGURAÇÕES ---
 #include "config.h"
 
+//--- GERENCIAMENTO DE DADOS ---
+#include "data_manager.h"
+
 // ==========================================
 //    CONFIGURAÇÕES DE HARDWARE (PINOS)
 // ==========================================
@@ -37,6 +40,7 @@
 const char* servidorNTP = "pool.ntp.org"; // Servidor mundial
 const long  gmtOffset_sec = -10800;       // -3h em segundos
 const int   daylightOffset_sec = 0;       // Sem horário de verão
+int   valor_de_teste = 0;
 
 //--- VARIAVEIS ---
 int ultimoMinuto = -1; 
@@ -137,12 +141,22 @@ void desenharInterfaceBase(){
   // 5. Lista de Tarefas (Labels fixos)
   tft.setCursor(0, 40);
   tft.setTextColor(ST7735_WHITE);
-  tft.println("[ ] Estudar ESP32");
-  tft.println("[ ] Atividade C++");
-  tft.println("[ ] Atividade SQL");
-  tft.println("[ ] Atividade MER");
-  tft.println("[ ] Ler livros");
-  tft.println("[ ] Tratar o cabelo");
+  if (valor_de_teste == 0) {
+    delay(2000); 
+    float acao = teste_tickers();
+    tft.println("XPML11 cotação:");
+    tft.println(acao);
+    valor_de_teste = valor_de_teste + 1;
+  }
+  else{
+    tft.println("XPML11 teste");
+  }
+  // tft.println("[ ] Estudar ESP32");
+  // tft.println("[ ] Atividade C++");
+  // tft.println("[ ] Atividade SQL");
+  // tft.println("[ ] Atividade MER");
+  // tft.println("[ ] Ler livros");
+  // tft.println("[ ] Tratar o cabelo");
   
   Serial.println("Interface base renderizada.");
 }
