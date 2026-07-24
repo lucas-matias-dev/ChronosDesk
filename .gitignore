@@ -6,3 +6,10 @@ build/
 .vscode/
 *.bin
 *.elf
+
+# Configuracao local do provisionador Python
+provisioner/.env
+provisioner/.venv/
+provisioner/__pycache__/
+provisioner/**/__pycache__/
+*.pyc

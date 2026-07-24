@@ -1,11 +1,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// Renomeie este arquivo para config.h e preencha com seus dados
+// Copie este arquivo como config.h e informe apenas as credenciais locais.
+// config.h e ignorado pelo Git.
 const char* WIFI_SSID = "SEU_SSID_AQUI";
 const char* WIFI_PASS = "SUA_SENHA_AQUI";
-
-const char* GOOGLE_SCRIPT_URL = "URL_DO_SEU_SCRIPT";
-const char* SPOTIFY_TOKEN = "SEU_TOKEN";
+const char* SPOTIFY_CLIENT_ID = "SEU_CLIENT_ID_SPOTIFY";
 
 #endif
