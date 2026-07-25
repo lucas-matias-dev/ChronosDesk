@@ -1,5 +1,6 @@
-# Configurações sensíveis (Suas senhas reais)
+# Configuracoes locais do firmware
 config.h
+src/config/Secrets.cpp
 
 # Pastas de compilação e temporários
 build/

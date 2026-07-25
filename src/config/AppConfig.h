@@ -4,8 +4,8 @@
 
 namespace AppConfig {
 namespace Display {
-constexpr uint8_t chipSelectPin = 5;
-constexpr uint8_t dataCommandPin = 2;
+constexpr uint8_t chipSelectPin = 6;
+constexpr uint8_t dataCommandPin = 5;
 constexpr uint8_t resetPin = 4;
 }  // namespace Display
 

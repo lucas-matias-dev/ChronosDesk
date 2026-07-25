@@ -56,7 +56,6 @@ Provisionador:
 ```text
 cod_01/
 ├── cod_01.ino
-├── config.h.example
 ├── provisioner/
 │   ├── main.py
 │   ├── spotify_auth.py
@@ -72,7 +71,9 @@ cod_01/
 │   │   └── AppController.*
 │   ├── config/
 │   │   ├── AppConfig.h
-│   │   └── Secrets.*
+│   │   ├── Secrets.h
+│   │   ├── Secrets.cpp
+│   │   └── Secrets.cpp.example
 │   ├── display/
 │   │   └── DisplayManager.*
 │   ├── network/
@@ -94,7 +95,9 @@ cod_01/
 └── .gitignore
 ```
 
-`config.h` e `provisioner/.env` são locais e ignorados pelo Git.
+`src/config/Secrets.cpp` e `provisioner/.env` são arquivos locais ignorados
+pelo Git. Os respectivos arquivos de exemplo podem ser versionados com
+segurança.
 
 ## Responsabilidades
 
@@ -112,24 +115,43 @@ cod_01/
 - `WiFiService`, `TimeService` e `DisplayManager`: preservam as
   responsabilidades da arquitetura anterior.
 
-## Configuração do firmware
+## Configuração local do firmware
 
-Copie `config.h.example` para `config.h`:
+Copie o exemplo para criar o arquivo local:
 
-```cpp
-#ifndef CONFIG_H
-#define CONFIG_H
-
-const char* WIFI_SSID = "NOME_DA_REDE";
-const char* WIFI_PASS = "SENHA_DA_REDE";
-const char* SPOTIFY_CLIENT_ID = "CLIENT_ID_DO_APLICATIVO";
-
-#endif
+```powershell
+Copy-Item .\src\config\Secrets.cpp.example .\src\config\Secrets.cpp
 ```
 
-O Client ID não é um segredo, mas deve ter uma única fonte local. Nunca
+Depois preencha somente a cópia `Secrets.cpp`:
+
+```cpp
+#include "Secrets.h"
+
+const char* const configuredWiFiSsid = "NOME_DA_REDE";
+const char* const configuredWiFiPassword = "SENHA_DA_REDE";
+const char* const configuredSpotifyClientId = "CLIENT_ID_DO_APLICATIVO";
+```
+
+`Secrets.h` contém apenas declarações usadas pelos serviços.
+`Secrets.cpp.example` contém placeholders e serve de modelo versionado.
+`Secrets.cpp` contém os valores efetivos do firmware e não deve ser
+versionado.
+
+O Client ID não é um segredo criptográfico, mas permanece junto das
+configurações locais para não ser espalhado pelos arquivos públicos. Nunca
 adicione Client Secret, tokens, senha do Spotify ou código de autorização ao
 firmware.
+
+O mesmo Spotify Client ID deve ser informado em `src/config/Secrets.cpp` e
+em `provisioner/.env`. Não preencha access token ou refresh token
+manualmente: eles são obtidos pelo provisionador, e o refresh token é
+armazenado na NVS do ESP32.
+
+O antigo `config.h` não é mais incluído pelo firmware. Ele e
+`config.h.example` são mantidos apenas como artefatos legados; não constituem
+uma segunda fonte de configuração. Novas instalações devem usar
+exclusivamente `Secrets.cpp` criado a partir de `Secrets.cpp.example`.
 
 Intervalos, limites, timezone e pinos estão em `src/config/AppConfig.h`.
 
@@ -143,7 +165,8 @@ Intervalos, limites, timezone e pinos estão em `src/config/AppConfig.h`.
    http://127.0.0.1:8888/callback
    ```
 
-4. Copie apenas o Client ID para `config.h` e `provisioner/.env`.
+4. Copie apenas o Client ID para `src/config/Secrets.cpp` e
+   `provisioner/.env`.
 5. Não crie nem utilize Client Secret.
 
 O callback precisa corresponder exatamente ao Dashboard. `localhost` não é
@@ -320,5 +343,5 @@ após revogação, expiração do refresh token ou troca do aplicativo Spotify.
 - NVS não criptografada;
 - certificado raiz precisa de manutenção se a PKI do Spotify mudar.
 
-Todos os arquivos de texto são UTF-8. Nunca publique `config.h`,
-`provisioner/.env`, tokens ou logs sensíveis.
+Todos os arquivos de texto são UTF-8. Nunca publique
+`src/config/Secrets.cpp`, `provisioner/.env`, tokens ou logs sensíveis.
