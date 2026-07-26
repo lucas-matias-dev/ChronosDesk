@@ -6,6 +6,7 @@
 
 #include "../config/AppConfig.h"
 #include "../config/Secrets.h"
+#include "../diagnostics/ResourceMonitor.h"
 #include "SpotifyCertificates.h"
 #include "SpotifyHttpUtils.h"
 
@@ -79,6 +80,7 @@ bool SpotifyAuthService::refreshAccessToken(uint32_t nowMs) {
 
   setState(SpotifyAuthState::Refreshing);
   Serial.println("[SPOTIFY][AUTH] Solicitando access token");
+  ResourceMonitor::checkpoint("spotify:before_token_refresh");
 
   NetworkClientSecure client;
   client.setCACert(spotifyRootCa);
@@ -99,11 +101,14 @@ bool SpotifyAuthService::refreshAccessToken(uint32_t nowMs) {
       formUrlEncode(credentials_.refreshToken) +
       "&client_id=" + formUrlEncode(configuredSpotifyClientId);
   const int statusCode = http.POST(body);
+  ResourceMonitor::recordHttpStatus(statusCode);
+  ResourceMonitor::checkpoint("spotify:token_https_complete");
   const String response = http.getString();
   http.end();
 
   JsonDocument document;
   const DeserializationError jsonError = deserializeJson(document, response);
+  ResourceMonitor::checkpoint("spotify:token_json_parsed");
   if (statusCode == 200 && jsonError == DeserializationError::Ok) {
     const char* token = document["access_token"] | "";
     const uint32_t expiresIn = document["expires_in"] | 0;
@@ -139,12 +144,18 @@ bool SpotifyAuthService::refreshAccessToken(uint32_t nowMs) {
     credentials_.clear();
     setState(SpotifyAuthState::ReauthorizationRequired);
     Serial.println("[SPOTIFY][AUTH] Refresh token invalido; reautorize");
+    ResourceMonitor::recordSpotifyFailure();
+    ResourceMonitor::checkpoint("spotify:invalid_grant");
     return false;
   }
 
   setState(SpotifyAuthState::TemporaryError);
   retryAtMs_ = nowMs + AppConfig::Spotify::initialBackoffMs;
   Serial.printf("[SPOTIFY][AUTH] Falha temporaria HTTP %d\n", statusCode);
+  ResourceMonitor::recordSpotifyFailure();
+  ResourceMonitor::checkpoint(
+      statusCode < 0 ? "spotify:token_connection_error"
+                     : "spotify:token_http_error");
   return false;
 }
 

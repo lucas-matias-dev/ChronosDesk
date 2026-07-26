@@ -1,6 +1,7 @@
 #include "TimeService.h"
 
 #include "../config/AppConfig.h"
+#include "../diagnostics/ResourceMonitor.h"
 
 namespace {
 constexpr time_t minimumValidEpoch = 1609459200;  // 2021-01-01 UTC
@@ -17,6 +18,7 @@ void TimeService::update(uint32_t nowMs, bool networkAvailable) {
     return;
   }
   lastPollMs_ = nowMs;
+  const bool wasValid = validTime_;
 
   struct tm localTime {};
   if (!readLocalTime(localTime)) {
@@ -39,6 +41,9 @@ void TimeService::update(uint32_t nowMs, bool networkAvailable) {
     minuteChanged_ = true;
   }
 
+  if (!wasValid) {
+    ResourceMonitor::checkpoint("ntp:synchronized");
+  }
   if (synchronizationLogged_) {
     Serial.println("[NTP] Horario sincronizado");
   }

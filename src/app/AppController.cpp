@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../config/AppConfig.h"
+#include "../diagnostics/ResourceMonitor.h"
 
 AppController::AppController()
     : spotifyView_(displayManager_),
@@ -11,10 +12,15 @@ AppController::AppController()
 
 void AppController::begin() {
   Serial.begin(115200);
+  ResourceMonitor::begin();
+  ResourceMonitor::checkpoint("serial:ready");
   displayManager_.begin();
+  ResourceMonitor::checkpoint("display:ready");
   spotifyView_.draw();
   authService_.begin();
+  ResourceMonitor::checkpoint("wifi:before_connect");
   wifiService_.begin();
+  ResourceMonitor::checkpoint("ntp:before_config");
   timeService_.begin();
   started_ = true;
 }
@@ -25,6 +31,7 @@ void AppController::update() {
   }
 
   const uint32_t nowMs = millis();
+  ResourceMonitor::update(nowMs);
   provisioningService_.update();
   if (provisioningService_.credentialsChanged()) {
     authService_.reloadCredentials();
@@ -97,7 +104,11 @@ void AppController::updateSpotify(uint32_t nowMs) {
   forceApiRequest_ = false;
   lastApiRequestMs_ = nowMs;
   Serial.println("[SPOTIFY][API] Consultando reproducao");
+  ResourceMonitor::recordSpotifyRequest();
+  ResourceMonitor::checkpoint("spotify:before_currently_playing");
   SpotifyPlayback updatedPlayback = playback_;
+  const bool hadItem = playback_.hasItem;
+  const bool wasPlaying = playback_.isPlaying;
   char itemBefore[sizeof(playback_.itemId)] {};
   snprintf(itemBefore, sizeof(itemBefore), "%s", playback_.itemId);
   const SpotifyApiResponse response = apiService_.fetchCurrentPlayback(
@@ -109,8 +120,16 @@ void AppController::updateSpotify(uint32_t nowMs) {
     const bool itemChanged = strcmp(itemBefore, playback_.itemId) != 0;
     if (itemChanged) {
       Serial.println("[SPOTIFY][API] Item atual alterado");
+      ResourceMonitor::checkpoint("spotify:item_changed");
     }
     spotifyView_.updatePlayback(playback_);
+    if (itemChanged || hadItem != playback_.hasItem ||
+        wasPlaying != playback_.isPlaying) {
+      ResourceMonitor::checkpoint(
+          wasPlaying == playback_.isPlaying
+              ? "ui:playback_updated"
+              : (playback_.isPlaying ? "ui:resumed" : "ui:paused"));
+    }
   }
 }
 
@@ -128,21 +147,29 @@ void AppController::handleApiResponse(const SpotifyApiResponse& response,
       setViewState(SpotifyViewState::NothingPlaying);
       break;
     case SpotifyApiResult::Unauthorized:
+      ResourceMonitor::recordSpotifyFailure();
+      ResourceMonitor::checkpoint("spotify:http_401");
       authService_.invalidateAccessToken();
       nextApiRequestMs_ = nowMs + AppConfig::Spotify::initialBackoffMs;
       setViewState(SpotifyViewState::Authorizing);
       break;
     case SpotifyApiResult::Forbidden:
+      ResourceMonitor::recordSpotifyFailure();
+      ResourceMonitor::checkpoint("spotify:http_403");
       increaseApiBackoff(nowMs);
       setViewState(SpotifyViewState::Unavailable);
       break;
     case SpotifyApiResult::RateLimited:
+      ResourceMonitor::recordSpotifyFailure();
+      ResourceMonitor::checkpoint("spotify:http_429");
       nextApiRequestMs_ = nowMs + max(
           response.retryAfterMs, AppConfig::Spotify::initialBackoffMs);
       setViewState(SpotifyViewState::RateLimited);
       break;
     case SpotifyApiResult::TemporaryFailure:
     case SpotifyApiResult::InvalidResponse:
+      ResourceMonitor::recordSpotifyFailure();
+      ResourceMonitor::checkpoint("spotify:request_error");
       increaseApiBackoff(nowMs);
       setViewState(SpotifyViewState::Unavailable);
       break;

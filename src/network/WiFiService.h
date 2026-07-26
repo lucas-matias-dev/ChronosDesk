@@ -23,5 +23,6 @@ class WiFiService {
 
   WiFiConnectionState state_ = WiFiConnectionState::Disconnected;
   uint32_t lastConnectionAttemptMs_ = 0;
+  bool hasConnectedBefore_ = false;
   bool stateChanged_ = false;
 };

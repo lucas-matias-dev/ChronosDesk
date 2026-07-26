@@ -5,6 +5,7 @@
 #include <NetworkClientSecure.h>
 
 #include "../config/AppConfig.h"
+#include "../diagnostics/ResourceMonitor.h"
 #include "SpotifyCertificates.h"
 
 namespace {
@@ -93,6 +94,8 @@ SpotifyApiResponse SpotifyApiService::fetchCurrentPlayback(
   http.addHeader("Authorization", "Bearer " + accessToken);
   http.addHeader("Accept", "application/json");
   const int statusCode = http.GET();
+  ResourceMonitor::recordHttpStatus(statusCode);
+  ResourceMonitor::checkpoint("spotify:playback_https_complete");
   Serial.printf("[SPOTIFY][API] HTTP %d\n", statusCode);
 
   SpotifyApiResponse response;
@@ -104,6 +107,7 @@ SpotifyApiResponse SpotifyApiService::fetchCurrentPlayback(
         BoundedStream stream(
             *http.getStreamPtr(), AppConfig::Spotify::maximumResponseBytes);
         const bool parsed = parsePlayback(stream, nowMs, playback);
+        ResourceMonitor::checkpoint("spotify:playback_json_parsed");
         response.result = parsed && !stream.limitReached()
                               ? SpotifyApiResult::PlaybackAvailable
                               : SpotifyApiResult::InvalidResponse;
