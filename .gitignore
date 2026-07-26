@@ -1,8 +1,16 @@
-# Configurações sensíveis (Suas senhas reais)
+# Configuracoes locais do firmware
 config.h
+src/config/Secrets.cpp
 
 # Pastas de compilação e temporários
 build/
 .vscode/
 *.bin
 *.elf
+
+# Configuracao local do provisionador Python
+provisioner/.env
+provisioner/.venv/
+provisioner/__pycache__/
+provisioner/**/__pycache__/
+*.pyc
