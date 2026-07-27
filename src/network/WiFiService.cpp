@@ -5,6 +5,7 @@
 
 #include "../config/AppConfig.h"
 #include "../config/Secrets.h"
+#include "../diagnostics/ResourceMonitor.h"
 
 void WiFiService::begin() {
   Network.begin();
@@ -16,10 +17,17 @@ void WiFiService::begin() {
 void WiFiService::update(uint32_t nowMs) {
   if (WiFi.STA.hasIP()) {
     if (state_ != WiFiConnectionState::Connected) {
+      const bool wasReconnect = hasConnectedBefore_;
       Network.setDefaultInterface(WiFi.STA);
       setState(WiFiConnectionState::Connected);
+      hasConnectedBefore_ = true;
       Serial.print("[WIFI] Conectado. IP: ");
       Serial.println(WiFi.STA.localIP());
+      if (wasReconnect) {
+        ResourceMonitor::recordWiFiReconnect();
+      }
+      ResourceMonitor::checkpoint(
+          wasReconnect ? "wifi:reconnected" : "wifi:connected");
     }
     return;
   }
@@ -27,6 +35,7 @@ void WiFiService::update(uint32_t nowMs) {
   if (state_ == WiFiConnectionState::Connected) {
     setState(WiFiConnectionState::Disconnected);
     Serial.println("[WIFI] Conexao perdida");
+    ResourceMonitor::checkpoint("wifi:disconnected");
   }
 
   const uint32_t timeSinceAttempt = nowMs - lastConnectionAttemptMs_;
