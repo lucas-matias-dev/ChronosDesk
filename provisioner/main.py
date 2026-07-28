@@ -1,4 +1,4 @@
-"""ChronosDesk Spotify provisioner for Windows."""
+"""ChronosDesk desktop provisioner and integration tests."""
 
 from __future__ import annotations
 
@@ -9,11 +9,6 @@ import webbrowser
 from pathlib import Path
 
 from callback_server import CallbackError, LoopbackCallbackServer
-from serial_transport import (
-    SerialProvisioningError,
-    SerialTransport,
-    available_ports,
-)
 from spotify_auth import (
     SpotifyAuthorizationError,
     build_authorization_url,
@@ -39,6 +34,8 @@ def load_local_environment() -> None:
 
 
 def choose_serial_port(explicit_port: str | None) -> str:
+    from serial_transport import available_ports
+
     if explicit_port:
         return explicit_port
     ports = available_ports()
@@ -48,6 +45,8 @@ def choose_serial_port(explicit_port: str | None) -> str:
 
 
 def run_provisioning(port: str, callback_port: int, timeout: int) -> None:
+    from serial_transport import SerialTransport
+
     client_id = os.environ.get("SPOTIFY_CLIENT_ID", "").strip()
     if not client_id:
         raise RuntimeError(
@@ -93,7 +92,20 @@ def run_provisioning(port: str, callback_port: int, timeout: int) -> None:
         tokens.clear()
 
 
-def main() -> int:
+def run_google_calendar_test(timeout_seconds: int) -> None:
+    from google_calendar.auth import GoogleOAuthClient
+    from google_calendar.config import load_google_calendar_config
+    from google_calendar.presenter import CalendarConsolePresenter
+    from google_calendar.use_case import GoogleCalendarValidationUseCase
+
+    config = load_google_calendar_config(environment={})
+    GoogleCalendarValidationUseCase(
+        GoogleOAuthClient(),
+        CalendarConsolePresenter(),
+    ).execute(config, timeout_seconds)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", help="Porta serial, por exemplo COM5")
     parser.add_argument("--callback-port", type=int, default=DEFAULT_CALLBACK_PORT)
@@ -103,7 +115,42 @@ def main() -> int:
         action="store_true",
         help="Apaga as credenciais Spotify da NVS sem iniciar OAuth.",
     )
-    arguments = parser.parse_args()
+    subparsers = parser.add_subparsers(dest="command")
+    google_parser = subparsers.add_parser(
+        "google-calendar-test",
+        help="Valida OAuth e lista os compromissos de hoje somente no computador.",
+        description=(
+            "Autoriza o Google Agenda e consulta os compromissos de hoje. "
+            "Não usa porta serial nem o ESP32."
+        ),
+    )
+    google_parser.add_argument(
+        "--timeout",
+        dest="google_timeout",
+        type=int,
+        default=180,
+        help="Tempo máximo, em segundos, para concluir o callback OAuth.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    arguments = parser.parse_args(argv)
+
+    if arguments.command == "google-calendar-test":
+        from google_calendar.errors import GoogleCalendarError
+
+        try:
+            run_google_calendar_test(arguments.google_timeout)
+            return 0
+        except KeyboardInterrupt:
+            print("\n[GCAL] Operação cancelada.")
+            return 130
+        except GoogleCalendarError as error:
+            print(f"[GCAL] Erro: {error}")
+            return 1
+
     load_local_environment()
     serial_port = choose_serial_port(arguments.port)
     if not serial_port:
@@ -111,6 +158,8 @@ def main() -> int:
         return 2
 
     try:
+        from serial_transport import SerialProvisioningError, SerialTransport
+
         if arguments.erase:
             SerialTransport(port=serial_port).erase()
             print("Credenciais apagadas.")

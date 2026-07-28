@@ -49,7 +49,11 @@ Firmware:
 Provisionador:
 
 - Python 3;
-- pyserial 3.5.
+- google-auth 2.56.0;
+- google-auth-oauthlib 1.4.0;
+- pyserial 3.5;
+- requests 2.34.2;
+- tzdata 2026.3.
 
 ## Estrutura
 
@@ -58,6 +62,17 @@ cod_01/
 ├── cod_01.ino
 ├── provisioner/
 │   ├── main.py
+│   ├── google_calendar/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── client.py
+│   │   ├── config.py
+│   │   ├── errors.py
+│   │   ├── models.py
+│   │   ├── parser.py
+│   │   ├── presenter.py
+│   │   ├── service.py
+│   │   └── use_case.py
 │   ├── spotify_auth.py
 │   ├── callback_server.py
 │   ├── serial_transport.py
@@ -65,7 +80,8 @@ cod_01/
 │   ├── requirements.txt
 │   ├── README.md
 │   └── tests/
-│       └── test_provisioner.py
+│       ├── test_provisioner.py
+│       └── test_google_calendar_*.py
 ├── src/
 │   ├── app/
 │   │   └── AppController.*
@@ -232,6 +248,36 @@ O provisionador:
 9. encerra o servidor e limpa referências sensíveis em memória.
 
 Nenhum token é salvo pelo Python. Consulte também
+[provisioner/README.md](provisioner/README.md).
+
+## Validação do Google Agenda no computador
+
+A Fase 4 adiciona um fluxo isolado para validar OAuth 2.0, PKCE, acesso offline
+e a consulta dos compromissos do dia antes de qualquer integração com o
+firmware:
+
+```powershell
+cd provisioner
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python .\main.py google-calendar-test
+```
+
+O caminho do JSON OAuth Desktop, mantido fora do repositório, é lido de
+`GOOGLE_OAUTH_CLIENT_FILE` em `provisioner/.env`. O timezone é lido de
+`GOOGLE_CALENDAR_TIMEZONE`, com `America/Sao_Paulo` como padrão.
+
+O comando usa exclusivamente o escopo
+`calendar.events.owned.readonly`, callback temporário em `127.0.0.1` com porta
+efêmera e consulta REST autenticada do calendário `primary`. Access token e
+refresh token permanecem somente em memória. A saída contém apenas título,
+data implícita do dia consultado e horário; nenhum ID, participante,
+localização ou descrição é mostrado.
+
+Esse comando não importa o transporte serial, não procura porta COM, não usa
+NVS e não exige que o ESP32 esteja conectado. O fluxo padrão
+`python main.py` continua sendo o provisionamento Spotify. As instruções
+completas, solução de erros e revogação estão em
 [provisioner/README.md](provisioner/README.md).
 
 ## Protocolo serial
