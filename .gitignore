@@ -13,4 +13,6 @@ provisioner/.env
 provisioner/.venv/
 provisioner/__pycache__/
 provisioner/**/__pycache__/
+provisioner/client_secret*.json
+provisioner/google_oauth*.json
 *.pyc
