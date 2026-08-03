@@ -9,6 +9,14 @@ constexpr uint8_t dataCommandPin = 5;
 constexpr uint8_t resetPin = 4;
 }  // namespace Display
 
+namespace Input {
+constexpr uint8_t rotaryEncoderClockPin = 16;
+constexpr uint8_t rotaryEncoderDataPin = 17;
+constexpr uint8_t rotaryEncoderSwitchPin = 18;
+constexpr int8_t rotaryEncoderTransitionsPerStep = 4;
+constexpr bool rotaryEncoderInvertDirection = false;
+}  // namespace Input
+
 namespace Network {
 constexpr uint32_t reconnectIntervalMs = 15000;
 constexpr uint32_t connectionTimeoutMs = 10000;

@@ -33,6 +33,19 @@ Pinos do display:
 | DC/RS | 2 |
 | RESET | 4 |
 
+Encoder rotativo incremental (alimentado em 3,3 V):
+
+| Sinal | GPIO |
+| --- | ---: |
+| CLK | 16 |
+| DT | 17 |
+| SW | 18 |
+
+CLK e DT navegam de forma circular entre as páginas Spotify e Calendário. A
+página Calendário é uma tela estática de teste e não acessa a Google Calendar
+API. O botão SW está configurado com pull-up, mas permanece reservado e sem
+função nesta etapa.
+
 A proteção de brownout permanece habilitada.
 
 ## Dependências
@@ -92,6 +105,8 @@ cod_01/
 │   │   └── Secrets.cpp.example
 │   ├── display/
 │   │   └── DisplayManager.*
+│   ├── input/
+│   │   └── RotaryEncoderService.*
 │   ├── network/
 │   │   └── WiFiService.*
 │   ├── spotify/
@@ -106,6 +121,7 @@ cod_01/
 │   ├── time/
 │   │   └── TimeService.*
 │   └── ui/
+│       ├── CalendarView.*
 │       └── SpotifyView.*
 ├── README.md
 └── .gitignore
@@ -128,8 +144,25 @@ segurança.
   interpreta somente os campos necessários.
 - `SpotifyPlayback`: modelo pequeno, sem JSON ou dependência gráfica.
 - `SpotifyView`: apresenta título, artista, play/pause, tempos, barra e estados.
+- `RotaryEncoderService`: consulta CLK e DT sem bloqueio, valida as transições
+  de quadratura e produz ações de navegação sem conhecer páginas ou display.
+- `CalendarView`: apresenta somente a página estática usada para validar a
+  navegação, preservando relógio e indicador de Wi-Fi no rodapé.
 - `WiFiService`, `TimeService` e `DisplayManager`: preservam as
   responsabilidades da arquitetura anterior.
+
+## Navegação pelo encoder
+
+O firmware inicia sempre na página Spotify. Um passo no sentido horário produz
+`NextPage`; um passo no sentido anti-horário produz `PreviousPage`. As ações
+são distintas mesmo com apenas duas páginas, e o `AppController` mantém a
+página ativa e solicita o redesenho somente quando ela muda.
+
+O decoder usa polling e uma tabela compacta de quadratura, sem interrupções,
+espera ativa ou biblioteca adicional. Quatro transições válidas formam um
+passo em `AppConfig::Input::rotaryEncoderTransitionsPerStep`. A orientação
+física precisa ser validada no hardware; se ficar invertida, altere somente
+`AppConfig::Input::rotaryEncoderInvertDirection` em `src/config/AppConfig.h`.
 
 ## Configuração local do firmware
 
@@ -377,6 +410,15 @@ após revogação, expiração do refresh token ou troca do aplicativo Spotify.
 5. Restaurar o Wi-Fi e observar recuperação.
 6. Apagar a NVS pelo provisionador e confirmar o estado não configurado.
 7. Reprovisionar e testar novamente.
+8. Conferir CLK em GPIO16, DT em GPIO17, SW em GPIO18, alimentação em 3V3 e
+   terra em GND.
+9. Reiniciar, confirmar Spotify como página inicial e deixar o encoder parado
+   por 30 segundos sem trocas espontâneas.
+10. Girar um detent em cada sentido e confirmar uma única troca circular por
+    detent, sem resíduos entre Spotify e Calendário.
+11. Pressionar SW e confirmar que nenhuma ação ocorre.
+12. Manter Calendário visível por alguns minutos e retornar a Spotify para
+    confirmar estado atual, relógio, Wi-Fi e serviços em segundo plano.
 
 ## Limitações do MVP
 
