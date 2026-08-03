@@ -7,6 +7,7 @@
 
 AppController::AppController()
     : spotifyView_(displayManager_),
+      calendarView_(displayManager_),
       provisioningService_(tokenStorage_),
       authService_(tokenStorage_) {}
 
@@ -17,6 +18,7 @@ void AppController::begin() {
   displayManager_.begin();
   ResourceMonitor::checkpoint("display:ready");
   spotifyView_.draw();
+  rotaryEncoderService_.begin();
   authService_.begin();
   ResourceMonitor::checkpoint("wifi:before_connect");
   wifiService_.begin();
@@ -31,12 +33,15 @@ void AppController::update() {
   }
 
   const uint32_t nowMs = millis();
+  handleInputAction(rotaryEncoderService_.update());
   ResourceMonitor::update(nowMs);
   provisioningService_.update();
   if (provisioningService_.credentialsChanged()) {
     authService_.reloadCredentials();
     playback_.clear();
-    spotifyView_.updatePlayback(playback_);
+    if (activePage_ == AppPage::Spotify) {
+      spotifyView_.updatePlayback(playback_);
+    }
     forceApiRequest_ = true;
   }
 
@@ -44,16 +49,84 @@ void AppController::update() {
   timeService_.update(nowMs, wifiService_.isConnected());
 
   if (wifiService_.stateChanged()) {
-    spotifyView_.updateWiFi(wifiService_.isConnected());
+    if (activePage_ == AppPage::Spotify) {
+      spotifyView_.updateWiFi(wifiService_.isConnected());
+    } else {
+      calendarView_.updateWiFi(wifiService_.isConnected());
+    }
   }
   if (timeService_.minuteChanged()) {
     char formattedDateTime[20];
     timeService_.formatDateTime(formattedDateTime, sizeof(formattedDateTime));
-    spotifyView_.updateDateTime(
-        formattedDateTime, timeService_.hasValidTime());
+    if (activePage_ == AppPage::Spotify) {
+      spotifyView_.updateDateTime(
+          formattedDateTime, timeService_.hasValidTime());
+    } else {
+      calendarView_.updateDateTime(
+          formattedDateTime, timeService_.hasValidTime());
+    }
   }
 
   updateSpotify(nowMs);
+}
+
+void AppController::handleInputAction(InputAction action) {
+  switch (action) {
+    case InputAction::NextPage:
+      nextPage();
+      break;
+    case InputAction::PreviousPage:
+      previousPage();
+      break;
+    case InputAction::None:
+      break;
+  }
+}
+
+void AppController::nextPage() {
+  constexpr uint8_t pageCount = static_cast<uint8_t>(AppPage::Count);
+  const uint8_t next =
+      (static_cast<uint8_t>(activePage_) + 1) % pageCount;
+  setPage(static_cast<AppPage>(next));
+}
+
+void AppController::previousPage() {
+  constexpr uint8_t pageCount = static_cast<uint8_t>(AppPage::Count);
+  const uint8_t previous =
+      (static_cast<uint8_t>(activePage_) + pageCount - 1) % pageCount;
+  setPage(static_cast<AppPage>(previous));
+}
+
+void AppController::setPage(AppPage page) {
+  if (page == AppPage::Count || page == activePage_) {
+    return;
+  }
+  activePage_ = page;
+  renderCurrentPage();
+}
+
+void AppController::renderCurrentPage() {
+  char formattedDateTime[20];
+  timeService_.formatDateTime(formattedDateTime, sizeof(formattedDateTime));
+
+  switch (activePage_) {
+    case AppPage::Spotify:
+      spotifyView_.draw();
+      spotifyView_.updatePlayback(playback_);
+      spotifyView_.updateState(viewState_);
+      spotifyView_.updateDateTime(
+          formattedDateTime, timeService_.hasValidTime());
+      spotifyView_.updateWiFi(wifiService_.isConnected());
+      break;
+    case AppPage::Calendar:
+      calendarView_.draw();
+      calendarView_.updateDateTime(
+          formattedDateTime, timeService_.hasValidTime());
+      calendarView_.updateWiFi(wifiService_.isConnected());
+      break;
+    case AppPage::Count:
+      break;
+  }
 }
 
 void AppController::updateSpotify(uint32_t nowMs) {
@@ -87,7 +160,7 @@ void AppController::updateSpotify(uint32_t nowMs) {
   if (nowMs - lastProgressUpdateMs_ >=
       AppConfig::Spotify::progressUpdateIntervalMs) {
     playback_.advanceProgress(nowMs);
-    if (playback_.hasItem) {
+    if (playback_.hasItem && activePage_ == AppPage::Spotify) {
       spotifyView_.updateProgress(playback_);
     }
     lastProgressUpdateMs_ = nowMs;
@@ -122,7 +195,9 @@ void AppController::updateSpotify(uint32_t nowMs) {
       Serial.println("[SPOTIFY][API] Item atual alterado");
       ResourceMonitor::checkpoint("spotify:item_changed");
     }
-    spotifyView_.updatePlayback(playback_);
+    if (activePage_ == AppPage::Spotify) {
+      spotifyView_.updatePlayback(playback_);
+    }
     if (itemChanged || hadItem != playback_.hasItem ||
         wasPlaying != playback_.isPlaying) {
       ResourceMonitor::checkpoint(
@@ -143,7 +218,9 @@ void AppController::handleApiResponse(const SpotifyApiResponse& response,
       break;
     case SpotifyApiResult::NothingPlaying:
       resetApiBackoff();
-      spotifyView_.updatePlayback(playback_);
+      if (activePage_ == AppPage::Spotify) {
+        spotifyView_.updatePlayback(playback_);
+      }
       setViewState(SpotifyViewState::NothingPlaying);
       break;
     case SpotifyApiResult::Unauthorized:
@@ -181,7 +258,9 @@ void AppController::setViewState(SpotifyViewState state) {
     return;
   }
   viewState_ = state;
-  spotifyView_.updateState(state);
+  if (activePage_ == AppPage::Spotify) {
+    spotifyView_.updateState(state);
+  }
 }
 
 void AppController::resetApiBackoff() {
