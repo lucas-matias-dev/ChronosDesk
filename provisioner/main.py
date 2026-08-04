@@ -105,6 +105,28 @@ def run_google_calendar_test(timeout_seconds: int) -> None:
     ).execute(config, timeout_seconds)
 
 
+def run_google_calendar_provision(
+    port: str, timeout_seconds: int
+) -> None:
+    from google_calendar.auth import GoogleOAuthClient
+    from google_calendar.config import load_google_calendar_config
+    from google_calendar.provisioning import GoogleCalendarProvisioningUseCase
+    from serial_transport import SerialTransport
+
+    config = load_google_calendar_config(environment={})
+    GoogleCalendarProvisioningUseCase(
+        GoogleOAuthClient(),
+        SerialTransport,
+    ).execute(config, port, timeout_seconds)
+
+
+def run_google_calendar_erase(port: str) -> None:
+    from google_calendar.provisioning import GoogleCalendarEraseUseCase
+    from serial_transport import SerialTransport
+
+    GoogleCalendarEraseUseCase(SerialTransport).execute(port)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", help="Porta serial, por exemplo COM5")
@@ -131,6 +153,41 @@ def build_parser() -> argparse.ArgumentParser:
         default=180,
         help="Tempo máximo, em segundos, para concluir o callback OAuth.",
     )
+    provision_parser = subparsers.add_parser(
+        "google-calendar-provision",
+        help="Autoriza no Google e provisiona o ESP32 pela serial.",
+        description=(
+            "Conclui o OAuth Google antes de abrir a porta serial e envia "
+            "somente o material persistente da Fase 5."
+        ),
+    )
+    provision_parser.add_argument(
+        "--port",
+        dest="google_port",
+        required=True,
+        help="Porta serial do ESP32, por exemplo COM5.",
+    )
+    provision_parser.add_argument(
+        "--timeout",
+        dest="google_provision_timeout",
+        type=int,
+        default=180,
+        help="Tempo máximo, em segundos, para concluir o callback OAuth.",
+    )
+    erase_parser = subparsers.add_parser(
+        "google-calendar-erase",
+        help="Apaga somente as credenciais Google armazenadas no ESP32.",
+        description=(
+            "Apaga localmente as credenciais Google do ESP32 sem iniciar OAuth "
+            "e sem revogar o acesso remoto."
+        ),
+    )
+    erase_parser.add_argument(
+        "--port",
+        dest="google_erase_port",
+        required=True,
+        help="Porta serial do ESP32, por exemplo COM5.",
+    )
     return parser
 
 
@@ -148,6 +205,29 @@ def main(argv: list[str] | None = None) -> int:
             print("\n[GCAL] Operação cancelada.")
             return 130
         except GoogleCalendarError as error:
+            print(f"[GCAL] Erro: {error}")
+            return 1
+
+    if arguments.command in {
+        "google-calendar-provision",
+        "google-calendar-erase",
+    }:
+        from google_calendar.errors import GoogleCalendarError
+        from serial_transport import SerialProvisioningError
+
+        try:
+            if arguments.command == "google-calendar-provision":
+                run_google_calendar_provision(
+                    arguments.google_port,
+                    arguments.google_provision_timeout,
+                )
+            else:
+                run_google_calendar_erase(arguments.google_erase_port)
+            return 0
+        except KeyboardInterrupt:
+            print("\n[GCAL] Operação cancelada.")
+            return 130
+        except (GoogleCalendarError, SerialProvisioningError) as error:
             print(f"[GCAL] Erro: {error}")
             return 1
 

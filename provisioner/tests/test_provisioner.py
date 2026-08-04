@@ -5,7 +5,7 @@ import unittest
 from urllib.parse import parse_qs, urlparse
 
 from callback_server import CallbackError, parse_callback_target
-from serial_transport import PROTOCOL_VERSION, build_message
+from serial_transport import PROTOCOL_VERSION, SPOTIFY_PROVIDER, build_message
 from spotify_auth import (
     REQUIRED_SCOPE,
     SpotifyAuthorizationError,
@@ -80,6 +80,7 @@ class SerialProtocolTests(unittest.TestCase):
         document = json.loads(message)
         self.assertEqual(document["protocol"], PROTOCOL_VERSION)
         self.assertEqual(document["type"], "provision_begin")
+        self.assertEqual(document["provider"], SPOTIFY_PROVIDER)
 
 
 if __name__ == "__main__":

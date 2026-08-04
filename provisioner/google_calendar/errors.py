@@ -13,6 +13,10 @@ class GoogleOAuthError(GoogleCalendarError):
     """OAuth authorization did not complete safely."""
 
 
+class GoogleCalendarProvisioningError(GoogleCalendarError):
+    """Provisioning material or serial confirmation is invalid."""
+
+
 class GoogleCalendarApiError(GoogleCalendarError):
     """Google Calendar returned an unusable response."""
 

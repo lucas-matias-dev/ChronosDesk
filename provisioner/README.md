@@ -1,11 +1,15 @@
 # Provisionador do ChronosDesk
 
-O provisionador oferece dois fluxos independentes:
+O provisionador oferece quatro fluxos independentes:
 
 - `python main.py`: preserva o provisionamento Spotify via OAuth 2.0 com PKCE
   e USB serial;
 - `python main.py google-calendar-test`: valida no computador o OAuth do
   Google Agenda e lista os compromissos do dia, sem usar serial ou ESP32.
+- `python main.py google-calendar-provision --port COMx`: conclui o OAuth
+  Google e depois provisiona o ESP32 pela serial;
+- `python main.py google-calendar-erase --port COMx`: apaga somente as
+  credenciais Google locais, sem OAuth e sem revogação remota.
 
 ## Preparação
 
@@ -92,10 +96,10 @@ JSON, o `client_id` ou o `client_secret`. Caminhos relativos, quando usados,
 são resolvidos a partir da pasta do `.env`.
 
 O JSON OAuth identifica o aplicativo Desktop perante o Google. O access token
-autoriza chamadas por curto período; o refresh token permitiria obter novos
-access tokens sem novo login. Nesta fase ambos permanecem somente em memória e
-são descartados ao encerrar o processo: nenhum token é salvo em arquivo,
-enviado pela serial ou gravado na NVS.
+autoriza chamadas por curto período; o refresh token permite obter novos
+access tokens sem novo login. No comando `google-calendar-test`, ambos
+permanecem somente em memória e são descartados ao encerrar o processo: esse
+comando não abre serial nem grava NVS.
 
 ### Execução
 
@@ -159,11 +163,70 @@ Depois, uma nova execução solicitará autorização novamente. Consulte a
 [documentação de OAuth do Google](https://developers.google.com/identity/protocols/oauth2)
 e a [ajuda sobre conexões de terceiros](https://support.google.com/accounts/answer/13533235?hl=pt-BR).
 
+## Fase 5: provisionamento Google no ESP32
+
+O provisionamento reutiliza exatamente o OAuth Google descrito acima, mas não
+consulta a Calendar API. A ordem é fixa: configuração local validada, OAuth e
+escopo confirmados, refresh token e Client ID validados em memória e, somente
+depois, abertura da porta serial. Portanto o ESP32 precisa estar disponível
+apenas para a etapa serial; a porta não fica ocupada durante o consentimento no
+navegador. Feche o Monitor Serial antes dessa etapa.
+
+Execute a partir da raiz do repositório, substituindo `COMx` pela porta local:
+
+```powershell
+python .\provisioner\main.py google-calendar-provision --port COMx
+```
+
+O protocolo serial v2 negocia explicitamente o provedor `google_calendar`. O
+payload persistente contém apenas versão do formato, Google Client ID, refresh
+token, timestamp UTC da autorização e o escopo fixo. O access token e o Client
+Secret nunca são enviados. Respostas do ESP32 confirmam apenas provedor,
+protocolo e resultado; elas não devolvem credenciais, partes, tamanhos ou hashes.
+
+O firmware valida tipo, provedor, protocolo, sequência, campos e limites antes
+de gravar. As credenciais ficam no namespace NVS exclusivo `gcal`, separado de
+`spotify`. No reprovisionamento, uma nova credencial é gravada e relida em um
+slot inativo antes de se tornar a configuração ativa. Nenhuma operação Google
+altera o token, timestamp, escopo, versão ou estado de provisionamento Spotify.
+
+Para apagar somente a configuração Google:
+
+```powershell
+python .\provisioner\main.py google-calendar-erase --port COMx
+```
+
+O apagamento é local e idempotente: remove o namespace `gcal`, preserva o
+namespace `spotify` e não acessa a Conta Google. Ele não equivale a revogação
+remota. Quando necessário, revogue manualmente em **Conta Google > Segurança >
+Conexões de terceiros**, conforme os links da seção anterior.
+
+Mensagens esperadas são confirmações sanitizadas como autorização validada,
+protocolo compatível, `storage_complete` ou `credentials_erased`. Nunca copie
+saída serial que contenha material de credenciais.
+
+### Roteiro manual da Fase 5
+
+1. Compile e grave manualmente o firmware com as opções N16R8 já validadas.
+2. Feche o Monitor Serial, conecte o ESP32 e identifique a porta local.
+3. Confirme localmente o caminho do JSON OAuth no `.env` e ative a `.venv`.
+4. Execute `google-calendar-provision --port COMx` e conclua o consentimento.
+5. Confirme que nenhum token aparece e que a serial abre somente após o OAuth.
+6. Confirme o resultado `storage_complete`, reinicie e valide o Spotify.
+7. Reprovisione e confirme a substituição sem impacto no Spotify.
+8. Execute `google-calendar-erase --port COMx` duas vezes e confirme o resultado
+   idempotente e a continuidade do Spotify.
+
+Nesta fase o ESP32 não renova access token Google, não chama endpoints Google,
+não consulta eventos, não implementa TLS/JSON do Calendar, cache, modo offline
+da agenda ou integração com o display.
+
 ## Segurança
 
 - não compartilhe o JSON OAuth, `.env`, access token ou refresh token;
 - não habilite logs HTTP detalhados com headers de autorização;
-- o fluxo Google não persiste tokens e não inicializa a serial;
-- o fluxo Spotify continua sendo o único que comunica credenciais ao ESP32;
+- `google-calendar-test` não persiste tokens e não inicializa a serial;
+- o provisionamento Google persiste somente o material necessário no ESP32;
+- Google e Spotify usam namespaces NVS e negociações de provedor separados;
 - o callback de ambos os fluxos usa somente loopback e existe apenas durante
   a autorização.
