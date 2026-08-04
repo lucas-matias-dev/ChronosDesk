@@ -32,6 +32,54 @@ class GoogleCalendarCliTests(unittest.TestCase):
         choose.assert_not_called()
         spotify.assert_not_called()
 
+    def test_google_provision_command_requires_port(self):
+        with (
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main.main(["google-calendar-provision"])
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_google_provision_command_selects_correct_flow(self):
+        with (
+            patch("main.run_google_calendar_provision") as provision,
+            patch("main.run_google_calendar_test") as desktop_test,
+            patch("main.run_provisioning") as spotify,
+        ):
+            result = main.main(
+                [
+                    "google-calendar-provision",
+                    "--port",
+                    "COM-FAKE",
+                    "--timeout",
+                    "15",
+                ]
+            )
+        self.assertEqual(result, 0)
+        provision.assert_called_once_with("COM-FAKE", 15)
+        desktop_test.assert_not_called()
+        spotify.assert_not_called()
+
+    def test_google_erase_command_selects_correct_flow(self):
+        with (
+            patch("main.run_google_calendar_erase") as erase,
+            patch("main.run_google_calendar_provision") as provision,
+        ):
+            result = main.main(
+                ["google-calendar-erase", "--port", "COM-FAKE"]
+            )
+        self.assertEqual(result, 0)
+        erase.assert_called_once_with("COM-FAKE")
+        provision.assert_not_called()
+
+    def test_google_erase_command_requires_port(self):
+        with (
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main.main(["google-calendar-erase"])
+        self.assertEqual(raised.exception.code, 2)
+
     def test_google_command_accepts_timeout(self):
         with patch("main.run_google_calendar_test") as google:
             result = main.main(["google-calendar-test", "--timeout", "15"])
@@ -49,8 +97,20 @@ class GoogleCalendarCliTests(unittest.TestCase):
             main.main(["--help"])
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("google-calendar-test", output.getvalue())
+        self.assertIn("google-calendar-provision", output.getvalue())
+        self.assertIn("google-calendar-erase", output.getvalue())
         google.assert_not_called()
         choose.assert_not_called()
+
+    def test_invalid_command_is_rejected_clearly(self):
+        error = io.StringIO()
+        with (
+            contextlib.redirect_stderr(error),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main.main(["unknown-command"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("invalid choice", error.getvalue())
 
     def test_google_error_is_sanitized_by_exception_contract(self):
         output = io.StringIO()

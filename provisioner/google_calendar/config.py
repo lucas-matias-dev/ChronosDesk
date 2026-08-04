@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -27,6 +27,7 @@ class GoogleCalendarConfig:
     client_file: Path
     timezone_name: str
     timezone: ZoneInfo
+    google_client_id: str = field(default="", repr=False)
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -58,7 +59,7 @@ def _resolve_client_file(raw_path: str, env_path: Path) -> Path:
     return candidate.resolve()
 
 
-def _validate_client_file(path: Path) -> None:
+def _validate_client_file(path: Path) -> str:
     if not path.exists():
         raise GoogleCalendarConfigError(
             f"Arquivo OAuth do Google não encontrado: {path}"
@@ -124,6 +125,8 @@ def _validate_client_file(path: Path) -> None:
             f"Campos inválidos no arquivo OAuth do Google ({fields}): {path}"
         )
 
+    return installed["client_id"]
+
 
 def load_google_calendar_config(
     env_path: Path = DEFAULT_ENV_FILE,
@@ -156,9 +159,10 @@ def load_google_calendar_config(
         ) from error
 
     client_file = _resolve_client_file(raw_client_file, env_path)
-    _validate_client_file(client_file)
+    google_client_id = _validate_client_file(client_file)
     return GoogleCalendarConfig(
         client_file=client_file,
         timezone_name=timezone_name,
         timezone=timezone,
+        google_client_id=google_client_id,
     )

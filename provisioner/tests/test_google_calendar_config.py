@@ -21,7 +21,7 @@ def desktop_document() -> dict:
 
 class GoogleCalendarConfigTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(dir=Path(__file__).parent)
+        self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
         self.env_path = self.directory / ".env"
@@ -73,6 +73,10 @@ class GoogleCalendarConfigTests(unittest.TestCase):
         config = load_google_calendar_config(self.env_path, {})
         self.assertEqual(config.client_file, self.client_path.resolve())
         self.assertEqual(config.timezone_name, "America/Sao_Paulo")
+        self.assertEqual(
+            config.google_client_id, "fake-client.apps.example"
+        )
+        self.assertNotIn("fake-client.apps.example", repr(config))
 
     def test_web_client_type_is_rejected(self):
         self.write_client({"web": desktop_document()["installed"]})

@@ -84,6 +84,7 @@ cod_01/
 │   │   ├── models.py
 │   │   ├── parser.py
 │   │   ├── presenter.py
+│   │   ├── provisioning.py
 │   │   ├── service.py
 │   │   └── use_case.py
 │   ├── spotify_auth.py
@@ -109,6 +110,11 @@ cod_01/
 │   │   └── RotaryEncoderService.*
 │   ├── network/
 │   │   └── WiFiService.*
+│   ├── provisioning/
+│   │   └── ProvisioningService.*
+│   ├── google_calendar/
+│   │   ├── GoogleCalendarCredentials.h
+│   │   └── GoogleCalendarTokenStorage.*
 │   ├── spotify/
 │   │   ├── SpotifyApiService.*
 │   │   ├── SpotifyAuthService.*
@@ -116,7 +122,6 @@ cod_01/
 │   │   ├── SpotifyCredentials.h
 │   │   ├── SpotifyHttpUtils.*
 │   │   ├── SpotifyPlayback.*
-│   │   ├── SpotifyProvisioningService.*
 │   │   └── SpotifyTokenStorage.*
 │   ├── time/
 │   │   └── TimeService.*
@@ -136,8 +141,10 @@ segurança.
 - `AppController`: coordena Wi-Fi, hora, autenticação, consultas e view.
 - `SpotifyTokenStorage`: valida e persiste refresh token, timestamp, scopes e
   versão em NVS por meio de `Preferences`.
-- `SpotifyProvisioningService`: recebe mensagens JSON pela USB serial sem
-  bloquear o loop.
+- `GoogleCalendarTokenStorage`: valida e persiste o material Google no
+  namespace NVS exclusivo `gcal`, com troca verificada entre dois slots.
+- `ProvisioningService`: é o único leitor USB serial e atua como dispatcher
+  mínimo dos provedores Spotify e Google Calendar, sem bloquear o loop.
 - `SpotifyAuthService`: obtém e renova access tokens. Access tokens permanecem
   somente na RAM.
 - `SpotifyApiService`: chama `/v1/me/player/currently-playing`, limita e
@@ -313,9 +320,43 @@ NVS e não exige que o ESP32 esteja conectado. O fluxo padrão
 completas, solução de erros e revogação estão em
 [provisioner/README.md](provisioner/README.md).
 
+## Fase 5: provisionamento Google Calendar
+
+O comando de provisionamento reutiliza o OAuth Google existente, mas não faz
+consulta de eventos. Ele valida configuração, escopo, refresh token e Client ID
+antes de instanciar o transporte; descarta o access token e só então abre a
+serial. Feche o Monitor Serial e substitua `COMx` pela porta local:
+
+```powershell
+python .\provisioner\main.py google-calendar-provision --port COMx
+```
+
+São enviados somente provedor, versões do protocolo e do formato persistido,
+Google Client ID, refresh token, timestamp UTC e o escopo mínimo fixo. Access
+token e Client Secret não são enviados nem persistidos. O firmware apenas
+valida e grava esse material no namespace NVS `gcal`; não acessa qualquer
+endpoint Google nesta fase.
+
+O reprovisionamento grava no slot inativo, relê e valida os campos e somente
+depois troca o marcador ativo. O namespace Spotify continua sendo `spotify` e
+o sinal de recarga das credenciais Spotify não é acionado por operações Google.
+
+Para apagar somente as credenciais Google locais, sem OAuth:
+
+```powershell
+python .\provisioner\main.py google-calendar-erase --port COMx
+```
+
+O comando é idempotente, preserva integralmente o Spotify e não revoga o
+acesso na Conta Google. A revogação remota, quando desejada, deve ser feita
+manualmente em **Conta Google > Segurança > Conexões de terceiros**.
+
 ## Protocolo serial
 
-O protocolo 1 usa JSON UTF-8 delimitado por quebra de linha.
+O protocolo 2 usa JSON UTF-8 delimitado por quebra de linha. Toda mensagem
+possui `provider` explícito, limitado a `spotify` ou `google_calendar`; respostas
+confirmam o mesmo provedor da solicitação. A versão 2 do protocolo é distinta
+da versão 1 dos formatos persistidos de cada provedor.
 
 | Direção | `type` | Finalidade |
 | --- | --- | --- |
@@ -329,7 +370,11 @@ O protocolo 1 usa JSON UTF-8 delimitado por quebra de linha.
 | PC → ESP32 | `erase_credentials` | Solicita apagamento |
 | ESP32 → PC | `credentials_erased` | Confirma apagamento |
 
-O ESP32 nunca devolve o refresh token.
+O handshake é obrigatório antes de armazenar ou apagar. Provedores, versões,
+tipos, sequência e payloads inválidos são rejeitados. A linha serial, o JSON,
+os campos e cada valor possuem limites centralizados; negociações incompletas
+expiram e retornam ao estado ocioso. O ESP32 nunca devolve Client ID, refresh
+token, escopo ou qualquer parte derivada desses valores.
 
 ## Operação diária
 
@@ -367,7 +412,7 @@ e [rate limits](https://developer.spotify.com/documentation/web-api/concepts/rat
 - O ESP32 abre somente conexões de saída.
 - Não existe callback, servidor administrativo, UPnP ou porta pública nele.
 - NVS não possui criptografia neste MVP; acesso físico ao dispositivo pode
-  expor o refresh token.
+  expor os refresh tokens.
 - Secure Boot, Flash Encryption e eFuses não são habilitados nesta etapa.
 - Logs nunca incluem tokens, códigos OAuth, senha Wi-Fi ou Authorization.
 
@@ -420,6 +465,20 @@ após revogação, expiração do refresh token ou troca do aplicativo Spotify.
 12. Manter Calendário visível por alguns minutos e retornar a Spotify para
     confirmar estado atual, relógio, Wi-Fi e serviços em segundo plano.
 
+### Complemento manual da Fase 5
+
+1. Gravar manualmente o firmware compilado com a configuração N16R8 existente.
+2. Fechar o Monitor Serial, conectar o ESP32 e identificar a porta local.
+3. Confirmar localmente o caminho do JSON OAuth em `.env` e ativar a `.venv`.
+4. Executar `google-calendar-provision --port COMx`, concluir o consentimento e
+   confirmar que a serial abre somente depois do OAuth.
+5. Confirmar `storage_complete`, ausência de tokens nos logs e funcionamento do
+   Spotify após reiniciar.
+6. Repetir o provisionamento e validar a substituição controlada.
+7. Executar `google-calendar-erase --port COMx` duas vezes, confirmar
+   `credentials_erased` e validar novamente o Spotify.
+8. Não esperar eventos na tela: a Fase 5 não integra a agenda ao display.
+
 ## Limitações do MVP
 
 - sem capa do álbum;
@@ -430,6 +489,8 @@ após revogação, expiração do refresh token ou troca do aplicativo Spotify.
 - chamadas HTTPS do HTTPClient são síncronas e limitadas por timeout;
 - NVS não criptografada;
 - certificado raiz precisa de manutenção se a PKI do Spotify mudar.
+- Google Calendar ainda não possui renovação de token, TLS, chamadas de API,
+  parsing de eventos, cache, modo offline ou integração com o display.
 
 Todos os arquivos de texto são UTF-8. Nunca publique
 `src/config/Secrets.cpp`, `provisioner/.env`, tokens ou logs sensíveis.

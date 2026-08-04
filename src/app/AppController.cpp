@@ -8,7 +8,7 @@
 AppController::AppController()
     : spotifyView_(displayManager_),
       calendarView_(displayManager_),
-      provisioningService_(tokenStorage_),
+      provisioningService_(tokenStorage_, googleCalendarTokenStorage_),
       authService_(tokenStorage_) {}
 
 void AppController::begin() {

@@ -1,12 +1,13 @@
 #pragma once
 
 #include "../display/DisplayManager.h"
+#include "../google_calendar/GoogleCalendarTokenStorage.h"
 #include "../input/RotaryEncoderService.h"
 #include "../network/WiFiService.h"
+#include "../provisioning/ProvisioningService.h"
 #include "../spotify/SpotifyApiService.h"
 #include "../spotify/SpotifyAuthService.h"
 #include "../spotify/SpotifyPlayback.h"
-#include "../spotify/SpotifyProvisioningService.h"
 #include "../spotify/SpotifyTokenStorage.h"
 #include "../time/TimeService.h"
 #include "../ui/CalendarView.h"
@@ -44,7 +45,8 @@ class AppController {
   WiFiService wifiService_;
   TimeService timeService_;
   SpotifyTokenStorage tokenStorage_;
-  SpotifyProvisioningService provisioningService_;
+  GoogleCalendarTokenStorage googleCalendarTokenStorage_;
+  ProvisioningService provisioningService_;
   SpotifyAuthService authService_;
   SpotifyApiService apiService_;
   SpotifyPlayback playback_;
